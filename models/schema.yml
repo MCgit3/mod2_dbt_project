@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: olist
+    schema: olist_dataset_mod2   # your BigQuery dataset name
+    tables:
+      - name: olist_orders
+      - name: olist_customers
+      - name: olist_order_items
+      - name: olist_order_payments
+      - name: olist_products
+      - name: olist_sellers
+
+models:
+  - name: clean_orders
+    description: "Orders table with canceled orders removed"
+    tests:
+      - not_null:
+          column_name: order_id
+      - unique:
+          column_name: order_id
+
+  - name: fact_payments
+    description: "Fact table combining orders and payments"
+    tests:
+      - not_null:
+          column_name: payment_value

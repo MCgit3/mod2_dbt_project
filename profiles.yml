@@ -1,0 +1,11 @@
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: hale-badge-505304-j8
+      dataset: olist_dataset_mod2
+      keyfile: /mnt/c/Mythili/NTU/Module_2/hale-badge-505304-j8-6583941cdaca.json
+      threads: 4
+      timeout_seconds: 300
