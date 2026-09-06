@@ -12,16 +12,23 @@ steps:
     args:
       - 'run'
       - 'jobs'
-      - 'execute'
+      - 'update'
       - 'dbt-job'
       - '--image=gcr.io/$PROJECT_ID/dbt-runner'
       - '--region=us-central1'
       - '--service-account=dbt-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+
+  # Step 4: Execute Cloud Run Job
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'execute'
+      - 'dbt-job'
+      - '--region=us-central1'
 
 images:
   - 'gcr.io/$PROJECT_ID/dbt-runner'
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
-
