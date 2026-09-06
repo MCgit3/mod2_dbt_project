@@ -11,7 +11,9 @@ WORKDIR /app
 COPY . /app
 
 # Tell dbt where to find your service account JSON
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
+#ENV GOOGLE_APPLICATION_CREDENTIALS=/app/hale-badge-505304-j8-6583941cdaca.json
+
+ENV DBT_PROFILES_DIR=/app
 
 # Default command: run dbt when the container starts
 CMD ["dbt", "run"]
