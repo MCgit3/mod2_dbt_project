@@ -12,7 +12,7 @@ steps:
     args:
       - 'run'
       - 'jobs'
-      - 'update'
+      - 'execute'
       - 'dbt-job'
       - '--image=gcr.io/$PROJECT_ID/dbt-runner'
       - '--region=us-central1'
