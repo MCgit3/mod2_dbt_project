@@ -1,31 +1,78 @@
+substitutions:
+  _PROJECT_ID: hale-badge-505304-j8
+  _REGION: us-central1
+
 steps:
-  # Step 1: Build Docker image
+  # Step 1: Build Docker image with dbt + notebooks + streamlit
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/dbt-runner', '.']
 
-  # Step 2: Push image to Artifact Registry
+  # Step 2: Push image
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/dbt-runner']
 
-  # Step 3: Update Cloud Run Job
+  # Step 3: Update Cloud Run Job for dbt run
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'run'
       - 'jobs'
       - 'update'
-      - 'dbt-job'
+      - 'dbt-run-job'
       - '--image=gcr.io/$PROJECT_ID/dbt-runner'
-      - '--region=us-central1'
-      - '--service-account=dbt-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+      - '--region=${_REGION}'
+      - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
+      - '--args=dbt run'
+    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
 
-  # Step 4: Execute Cloud Run Job
+  # Step 4: Update Cloud Run Job for dbt test
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'run'
       - 'jobs'
-      - 'execute'
-      - 'dbt-job'
-      - '--region=us-central1'
+      - 'update'
+      - 'dbt-test-job'
+      - '--image=gcr.io/$PROJECT_ID/dbt-runner'
+      - '--region=${_REGION}'
+      - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
+      - '--args=dbt test'
+    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
+
+  # Step 5: Execute dbt run job
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['run', 'jobs', 'execute', 'dbt-run-job', '--region=${_REGION}']
+
+  # Step 6: Execute dbt test job
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['run', 'jobs', 'execute', 'dbt-test-job', '--region=${_REGION}']
+
+  # Step 7: Run analysis notebooks with papermill
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'run'
+      - '--rm'
+      - 'gcr.io/$PROJECT_ID/dbt-runner'
+      - 'papermill'
+      - '/app/notebooks/analysis.ipynb'
+      - '/app/notebooks/analysis_output.ipynb'
+    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
+
+  # Step 8: Deploy Streamlit app to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'streamlit-app'
+      - '--image=gcr.io/$PROJECT_ID/dbt-runner'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
+      - '--allow-unauthenticated'
+    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/dbt-sa-key/versions/latest
+      env: 'GOOGLE_APPLICATION_CREDENTIALS'
 
 images:
   - 'gcr.io/$PROJECT_ID/dbt-runner'

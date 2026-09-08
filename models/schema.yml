@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: olist
-    schema: olist_dataset_mod2   # your BigQuery dataset name
+    schema: olist_dataset_mod2
     tables:
       - name: olist_orders
       - name: olist_customers
@@ -11,17 +11,183 @@ sources:
       - name: olist_products
       - name: olist_sellers
 
-models:
-  - name: clean_orders
-    description: "Orders table with canceled orders removed"
-    tests:
-      - not_null:
-          column_name: order_id
-      - unique:
-          column_name: order_id
 
+models:
+
+  # ==================================================
+  # CLEAN ORDERS
+  # Grain: 1 row per order
+  # ==================================================
+  - name: clean_orders
+    description: "Clean orders containing only valid order statuses"
+
+    columns:
+
+      - name: order_id
+        description: "Unique identifier for each order"
+        tests:
+          - not_null
+          - unique
+
+      - name: customer_id
+        description: "Customer associated with the order"
+        tests:
+          - not_null
+
+      - name: order_status
+        description: "Current status of the order"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set:
+                  - delivered
+                  - shipped
+                  - processing
+                  - invoiced
+
+      - name: order_purchase_timestamp
+        description: "Timestamp when the order was placed"
+        tests:
+          - not_null
+
+
+  # ==================================================
+  # FACT PAYMENTS
+  # Grain: 1 row per payment
+  # ==================================================
   - name: fact_payments
-    description: "Fact table combining orders and payments"
-    tests:
-      - not_null:
-          column_name: payment_value
+    description: "Payment fact table containing payment transactions for orders"
+
+    columns:
+
+      - name: order_id
+        description: "Order associated with the payment"
+        tests:
+          - not_null
+
+      - name: payment_value
+        description: "Value of the payment"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 100000
+
+      - name: payment_type
+        description: "Payment method used for the order"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_type_list:
+              arguments:
+                column_type_list:
+                  - STRING
+
+
+  # ==================================================
+  # FACT ORDERS
+  # Grain: 1 row per order
+  # ==================================================
+  - name: fact_orders
+    description: "Order-level fact table with aggregated item and payment information"
+
+    columns:
+
+      - name: order_id
+        description: "Unique identifier for each order"
+        tests:
+          - not_null
+          - unique
+
+      - name: customer_id
+        description: "Customer associated with the order"
+        tests:
+          - not_null
+
+      - name: order_date
+        description: "Timestamp when the order was placed"
+        tests:
+          - not_null
+
+      - name: item_count
+        description: "Number of items in the order"
+        tests:
+          - not_null
+
+      - name: total_item_value
+        description: "Total value of items in the order"
+        tests:
+          - not_null
+
+      - name: total_freight_value
+        description: "Total freight value for the order"
+        tests:
+          - not_null
+
+      - name: total_payment_value
+        description: "Total payment value associated with the order"
+        tests:
+          - not_null
+
+
+  # ==================================================
+  # CUSTOMER DIMENSION
+  # Grain: 1 row per customer
+  # ==================================================
+  - name: dim_customers
+    description: "Customer dimension"
+
+    columns:
+
+      - name: customer_id
+        description: "Unique customer identifier"
+        tests:
+          - not_null
+          - unique
+
+
+  # ==================================================
+  # PRODUCT DIMENSION
+  # Grain: 1 row per product
+  # ==================================================
+  - name: dim_products
+    description: "Product dimension"
+
+    columns:
+
+      - name: product_id
+        description: "Unique product identifier"
+        tests:
+          - not_null
+          - unique
+
+
+  # ==================================================
+  # SELLER DIMENSION
+  # Grain: 1 row per seller
+  # ==================================================
+  - name: dim_sellers
+    description: "Seller dimension"
+
+    columns:
+
+      - name: seller_id
+        description: "Unique seller identifier"
+        tests:
+          - not_null
+          - unique
+
+
+  # ==================================================
+  # DATE DIMENSION
+  # Grain: 1 row per date
+  # ==================================================
+  - name: dim_dates
+    description: "Date dimension"
+
+    columns:
+
+      - name: order_date
+        description: "Order date"
+        tests:
+          - not_null
+          - unique
