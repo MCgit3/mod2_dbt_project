@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 # Install dbt-bigquery and expectations
-RUN pip install --no-cache-dir dbt-bigquery==1.11.1 dbt-expectations
+RUN pip install --no-cache-dir dbt-bigquery==1.11.1
 
 # Install analysis dependencies
 RUN pip install --no-cache-dir streamlit pandas plotly jupyter papermill
