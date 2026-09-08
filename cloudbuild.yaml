@@ -22,7 +22,6 @@ steps:
       - '--region=${_REGION}'
       - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
       - '--args=dbt run'
-    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
 
   # Step 4: Update Cloud Run Job for dbt test
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -35,7 +34,6 @@ steps:
       - '--region=${_REGION}'
       - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
       - '--args=dbt test'
-    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
 
   # Step 5: Execute dbt run job
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -54,7 +52,6 @@ steps:
       - 'papermill'
       - '/app/notebooks/analysis.ipynb'
       - '/app/notebooks/analysis_output.ipynb'
-    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
 
   # Step 8: Deploy Streamlit app to Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -67,12 +64,6 @@ steps:
       - '--platform=managed'
       - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
       - '--allow-unauthenticated'
-    secretEnv: ['GOOGLE_APPLICATION_CREDENTIALS']
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/dbt-sa-key/versions/latest
-      env: 'GOOGLE_APPLICATION_CREDENTIALS'
 
 images:
   - 'gcr.io/$PROJECT_ID/dbt-runner'
