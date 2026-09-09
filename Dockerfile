@@ -5,7 +5,16 @@ FROM python:3.11-slim
 RUN pip install --no-cache-dir dbt-bigquery==1.11.1
 
 # Install analysis dependencies
-RUN pip install --no-cache-dir streamlit pandas plotly jupyter papermill
+RUN pip install --no-cache-dir \
+    streamlit \
+    pandas \
+    numpy \
+    plotly \
+    matplotlib \
+    seaborn \
+    jupyter \
+    papermill \
+    google-cloud-bigquery
 
 WORKDIR /app
 
