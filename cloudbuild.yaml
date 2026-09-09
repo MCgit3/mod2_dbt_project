@@ -1,72 +1,173 @@
 substitutions:
-  _PROJECT_ID: hale-badge-505304-j8
-  _REGION: us-central1
+  _REGION: "us-central1"
+  _PIPELINE_MODE: "dbt"
 
 steps:
-  # Step 1: Build Docker image with dbt + notebooks + streamlit
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/dbt-runner', '.']
 
-  # Step 2: Push image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/dbt-runner']
+  # ============================================================
+  # STEP 1: BUILD DOCKER IMAGE
+  # ============================================================
 
-  # Step 3: Update Cloud Run Job for dbt run
-  - name: 'gcr.io/cloud-builders/gcloud'
+  - id: build-image
+    name: "gcr.io/cloud-builders/docker"
     args:
-      - 'run'
-      - 'jobs'
-      - 'update'
-      - 'dbt-run-job'
-      - '--image=gcr.io/$PROJECT_ID/dbt-runner'
-      - '--region=${_REGION}'
-      - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
-      - '--args=dbt run'
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID"
+      - "."
 
-  # Step 4: Update Cloud Run Job for dbt test
-  - name: 'gcr.io/cloud-builders/gcloud'
+
+  # ============================================================
+  # STEP 2: PUSH DOCKER IMAGE
+  # ============================================================
+
+  - id: push-image
+    name: "gcr.io/cloud-builders/docker"
     args:
-      - 'run'
-      - 'jobs'
-      - 'update'
-      - 'dbt-test-job'
-      - '--image=gcr.io/$PROJECT_ID/dbt-runner'
-      - '--region=${_REGION}'
-      - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
-      - '--args=dbt test'
+      - "push"
+      - "gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID"
 
-  # Step 5: Execute dbt run job
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args: ['run', 'jobs', 'execute', 'dbt-run-job', '--region=${_REGION}']
 
-  # Step 6: Execute dbt test job
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args: ['run', 'jobs', 'execute', 'dbt-test-job', '--region=${_REGION}']
+  # ============================================================
+  # STEP 3: DBT PIPELINE
+  #
+  # Runs only when:
+  # _PIPELINE_MODE = dbt
+  # ============================================================
 
-  # Step 7: Run analysis notebooks with papermill
-  - name: 'gcr.io/cloud-builders/docker'
+  - id: update-and-run-dbt
+    name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "bash"
     args:
-      - 'run'
-      - '--rm'
-      - 'gcr.io/$PROJECT_ID/dbt-runner'
-      - 'papermill'
-      - '/app/notebooks/analysis.ipynb'
-      - '/app/notebooks/analysis_output.ipynb'
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "dbt" ]]; then
 
-  # Step 8: Deploy Streamlit app to Cloud Run
-  - name: 'gcr.io/cloud-builders/gcloud'
+          echo "=========================================="
+          echo "DBT MODE"
+          echo "Updating and running dbt"
+          echo "=========================================="
+
+          # Update existing dbt-run-job
+          gcloud run jobs update dbt-run-job \
+            --image=gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID \
+            --region=${_REGION}
+
+          # Run dbt and wait until it finishes
+          gcloud run jobs execute dbt-run-job \
+            --region=${_REGION} \
+            --wait
+
+        else
+          echo "Skipping dbt run."
+        fi
+
+
+  # ============================================================
+  # STEP 4: DBT TEST PIPELINE
+  #
+  # Runs only when:
+  # _PIPELINE_MODE = dbt
+  # ============================================================
+
+  - id: update-and-run-dbt-test
+    name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "bash"
     args:
-      - 'run'
-      - 'deploy'
-      - 'streamlit-app'
-      - '--image=gcr.io/$PROJECT_ID/dbt-runner'
-      - '--region=${_REGION}'
-      - '--platform=managed'
-      - '--service-account=dbt-runner@${_PROJECT_ID}.iam.gserviceaccount.com'
-      - '--allow-unauthenticated'
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "dbt" ]]; then
+
+          echo "=========================================="
+          echo "DBT TEST MODE"
+          echo "Updating and running dbt tests"
+          echo "=========================================="
+
+          # Update existing dbt-test-job
+          gcloud run jobs update dbt-test-job \
+            --image=gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID \
+            --region=${_REGION}
+
+          # Run dbt tests and wait until complete
+          gcloud run jobs execute dbt-test-job \
+            --region=${_REGION} \
+            --wait
+
+        else
+          echo "Skipping dbt tests."
+        fi
+
+
+  # ============================================================
+  # STEP 5: RUN ANALYSIS NOTEBOOK
+  #
+  # Runs when:
+  # _PIPELINE_MODE = dbt
+  # OR
+  # _PIPELINE_MODE = notebook
+  #
+  # We use a Docker build step because your current setup does
+  # not yet have a separate notebook Cloud Run Job.
+  # ============================================================
+
+  - id: run-notebook
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "dbt" || \
+              "${_PIPELINE_MODE}" == "notebook" ]]; then
+
+          echo "=========================================="
+          echo "RUNNING ANALYSIS NOTEBOOK"
+          echo "=========================================="
+
+          docker run --rm \
+            gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID \
+            papermill \
+            /app/notebooks/analysis.ipynb \
+            /app/notebooks/analysis_output.ipynb
+
+        else
+          echo "Skipping notebook."
+        fi
+
+
+  # ============================================================
+  # STEP 6: DEPLOY STREAMLIT
+  #
+  # Runs only when:
+  # _PIPELINE_MODE = streamlit
+  # ============================================================
+
+  - id: deploy-streamlit
+    name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "streamlit" ]]; then
+
+          echo "=========================================="
+          echo "STREAMLIT MODE"
+          echo "Deploying Streamlit"
+          echo "=========================================="
+
+          gcloud run deploy streamlit-app \
+            --image=gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID \
+            --region=${_REGION} \
+            --platform=managed \
+            --allow-unauthenticated
+
+        else
+          echo "Skipping Streamlit deployment."
+        fi
+
 
 images:
-  - 'gcr.io/$PROJECT_ID/dbt-runner'
+  - "gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID"
+
 
 options:
   logging: CLOUD_LOGGING_ONLY
