@@ -27,5 +27,7 @@ ENV DBT_PROFILES_DIR=/app
 # Install dbt packages
 RUN dbt deps
 
-# Default command
-CMD ["dbt", "run"]
+# Cloud Run provides PORT, normally 8080
+CMD streamlit run app.py \
+    --server.port=${PORT:-8080} \
+    --server.address=0.0.0.0
