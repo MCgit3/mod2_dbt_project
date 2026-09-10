@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 from google.cloud import bigquery
 
+#test trigger
+
 
 # --------------------------------------------------
 # Configuration
