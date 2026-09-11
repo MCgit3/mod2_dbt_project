@@ -8,6 +8,8 @@ substitutions:
   # notebook     -> notebook-trigger
   # streamlit    -> streamlit-trigger
   # shared-image -> shared-image-trigger
+  # data         -> data-pipeline-trigger
+  #
   _PIPELINE_MODE: "streamlit"
 
 
@@ -20,39 +22,81 @@ steps:
   #   1. dbt-job
   #   2. notebook-run-job
   #   3. streamlit-dashboard
+  #
+  # Image build is required only when code/image changes.
+  # It is NOT required when only new Kaggle data arrives.
   # ============================================================
 
   - id: build-image
     name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
     args:
-      - "build"
-      - "-t"
-      - "gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID"
-      - "-t"
-      - "gcr.io/$PROJECT_ID/dbt-runner:latest"
-      - "."
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "data" ]]; then
+          echo "========================================"
+          echo "New data mode - skipping Docker build"
+          echo "========================================"
+        else
+          echo "========================================"
+          echo "Building shared Docker image"
+          echo "========================================"
+
+          docker build \
+            -t gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID \
+            -t gcr.io/$PROJECT_ID/dbt-runner:latest \
+            .
+        fi
 
 
   # ============================================================
   # STEP 2 - PUSH BUILD-SPECIFIC IMAGE
+  #
+  # Skip when only new data arrives.
   # ============================================================
 
   - id: push-build-image
     name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
     args:
-      - "push"
-      - "gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID"
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "data" ]]; then
+          echo "Skipping build-specific image push."
+
+        else
+          echo "========================================"
+          echo "Pushing build-specific image"
+          echo "========================================"
+
+          docker push \
+            gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID
+        fi
 
 
   # ============================================================
   # STEP 3 - PUSH LATEST IMAGE
+  #
+  # Skip when only new data arrives.
   # ============================================================
 
   - id: push-latest-image
     name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
     args:
-      - "push"
-      - "gcr.io/$PROJECT_ID/dbt-runner:latest"
+      - "-c"
+      - |
+        if [[ "${_PIPELINE_MODE}" == "data" ]]; then
+          echo "Skipping latest image push."
+
+        else
+          echo "========================================"
+          echo "Pushing latest image"
+          echo "========================================"
+
+          docker push \
+            gcr.io/$PROJECT_ID/dbt-runner:latest
+        fi
 
 
   # ============================================================
@@ -61,6 +105,8 @@ steps:
   # Needed when:
   #   dbt code changes
   #   OR Dockerfile/shared image changes
+  #
+  # NOT needed when new data arrives.
   # ============================================================
 
   - id: update-dbt-job
@@ -88,7 +134,9 @@ steps:
   # ============================================================
   # STEP 5 - RUN DBT JOB
   #
-  # Runs ONLY for DBT pipeline changes.
+  # Run when:
+  #   dbt code changes
+  #   OR new source data arrives
   #
   # dbt-job itself runs:
   #
@@ -101,10 +149,12 @@ steps:
     args:
       - "-c"
       - |
-        if [[ "${_PIPELINE_MODE}" == "dbt" ]]; then
+        if [[ "${_PIPELINE_MODE}" == "dbt" || \
+              "${_PIPELINE_MODE}" == "data" ]]; then
 
           echo "========================================"
           echo "Executing dbt-job"
+          echo "Pipeline mode: ${_PIPELINE_MODE}"
           echo "========================================"
 
           gcloud run jobs execute dbt-job \
@@ -123,6 +173,8 @@ steps:
   #   dbt code changes
   #   notebook changes
   #   Dockerfile/shared image changes
+  #
+  # NOT needed when new data arrives.
   # ============================================================
 
   - id: update-notebook-job
@@ -149,11 +201,12 @@ steps:
 
 
   # ============================================================
-  # STEP 7 - RUN NOTEBOOK
+  # STEP 7 - RUN NOTEBOOK JOB
   #
-  # Runs when:
+  # Run when:
   #   dbt changed
-  #   OR notebook changed
+  #   notebook changed
+  #   OR new data arrives
   # ============================================================
 
   - id: run-notebook-job
@@ -163,10 +216,12 @@ steps:
       - "-c"
       - |
         if [[ "${_PIPELINE_MODE}" == "dbt" || \
-              "${_PIPELINE_MODE}" == "notebook" ]]; then
+              "${_PIPELINE_MODE}" == "notebook" || \
+              "${_PIPELINE_MODE}" == "data" ]]; then
 
           echo "========================================"
           echo "Executing notebook-run-job"
+          echo "Pipeline mode: ${_PIPELINE_MODE}"
           echo "========================================"
 
           gcloud run jobs execute notebook-run-job \
@@ -186,6 +241,8 @@ steps:
   #   notebook changed
   #   app.py changed
   #   Dockerfile/shared image changed
+  #
+  # NOT needed when only data changes.
   # ============================================================
 
   - id: deploy-streamlit
@@ -201,6 +258,7 @@ steps:
 
           echo "========================================"
           echo "Deploying Streamlit"
+          echo "Pipeline mode: ${_PIPELINE_MODE}"
           echo "========================================"
 
           gcloud run deploy streamlit-dashboard \
