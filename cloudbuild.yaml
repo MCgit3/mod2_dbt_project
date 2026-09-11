@@ -271,11 +271,5 @@ steps:
           echo "Skipping Streamlit deployment."
         fi
 
-
-images:
-  - "gcr.io/$PROJECT_ID/dbt-runner:$BUILD_ID"
-  - "gcr.io/$PROJECT_ID/dbt-runner:latest"
-
-
 options:
   logging: CLOUD_LOGGING_ONLY
