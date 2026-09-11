@@ -163,6 +163,33 @@ This approach minimizes manual intervention, leverages serverless scaling, and p
 - **dbt (Data Build Tool)**  
   A framework for transforming data in warehouses using SQL.
 
+- **cloudbuild.yaml**  
+  A configuration file that defines the steps Cloud Build should execute. Each step specifies a Docker image and commands to run, allowing you to build, test, and deploy applications in a reproducible way.  
+
+  **Why it’s used:**  
+  It acts as the “recipe” for your CI/CD pipeline — instead of clicking buttons in the Cloud Console, you declare the workflow in YAML so it can be version‑controlled and automated.  
+
+  **ELI5:**  
+  Think of it like a checklist for a robot: “Step 1, build the image. Step 2, run tests. Step 3, deploy to Cloud Run.” The robot follows the checklist every time, ensuring consistency.  
+
+  **Example (minimal 3‑step pipeline):**
+  ```yaml
+  steps:
+    # Step 1: Build Docker image
+    - name: 'gcr.io/cloud-builders/docker'
+      args: ['build', '-t', 'gcr.io/$PROJECT_ID/my-app', '.']
+
+    # Step 2: Push image to Container Registry
+    - name: 'gcr.io/cloud-builders/docker'
+      args: ['push', 'gcr.io/$PROJECT_ID/my-app']
+
+    # Step 3: Deploy to Cloud Run
+    - name: 'gcr.io/cloud-builders/gcloud'
+      args: ['run', 'deploy', 'my-app',
+             '--image', 'gcr.io/$PROJECT_ID/my-app',
+             '--region', 'us-central1']
+
+
 ---
 
 ### Concepts
