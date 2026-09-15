@@ -4,6 +4,7 @@ import plotly.express as px
 from google.cloud import bigquery
 
 #test trigger
+#test trigger 2
 
 
 # --------------------------------------------------
