@@ -269,7 +269,51 @@ Jobs are optimized for run-to-completion processes. They run on-demand or on a s
 
 ---
 
-## 5. Supporting Storage, Registries & Database Infrastructure
+## 5. Daily Kaggle Import Cron Job (Cloud Scheduler Job)
+
+This job is responsible for triggering the automated daily ingestion of Kaggle datasets into Google Cloud Storage and BigQuery pipeline.
+
+### a. General Job Metadata
+* **Job ID:** `daily-kaggle-import`
+* **Region/Location:** `us-central1`
+* **Status:** `ENABLED` (Active)
+* **Parent Project:** `hale-badge-505304-j8`
+
+---
+
+### b. Trigger & Target Configuration
+* **Target Type:** `HTTP`
+* **HTTP Method:** `GET`
+* **Target URI:** `https://mod2-dataset-robot-<PROJECT_NUMBER>.us-central1.run.app/`
+* **Attempt Deadline:** `180 seconds` (3 minutes)
+* **Headers:** 
+  * `User-Agent`: `Google-Cloud-Scheduler`
+
+---
+
+### c. Schedule Settings
+* **Cron Schedule:** `0 0 * * *`
+* **Frequency:** Triggers daily at midnight (12:00 AM)
+* **Time Zone:** `Asia/Singapore`
+
+---
+
+### d. Reliability & Retry Policy
+To handle transient errors or downstream cold starts gracefully, the job uses the following parameters:
+* **Max Retry Attempts:** `3`
+* **Min Backoff Duration:** `10 seconds`
+* **Max Backoff Duration:** `3,600 seconds` (1 hour)
+* **Max Doublings:** `5`
+
+---
+
+### e. Associated Pipeline Actions
+When the cron triggers, it performs an HTTP request to the Cloud Run service `mod2-dataset-robot`, initiating the `import_kaggle_data` handler function to:
+1. Authenticate with Kaggle via configured API credentials.
+2. Download the target dataset (`olist_dataset_mod2`).
+3. Store raw payloads in the Google Cloud Storage bucket (`olist-bucket-mod2`).
+
+## 6. Supporting Storage, Registries & Database Infrastructure
 
 To support the serverless execution and automated pipelines, the project utilizes the following managed storage and analytical database resources in Google Cloud:
 
@@ -306,5 +350,27 @@ The destination database where raw data is structured, modeled, and transformed 
 * **Associated Settings & Purpose:**
   * *IAM Permissions:* The service account `bigquery-admin-717@hale-badge-505304-j8.iam.gserviceaccount.com` has Admin access to run queries, write tables, and execute dataset modifications.
   * *Integration with dbt:* `dbt-job` directly targets this dataset to compile raw tables, run schema tests, and build clean analytical views.
+
+## 7. Glossary of Terms
+
+### Cloud Run Services vs. Cloud Run Jobs
+
+### Cloud Run Service
+A managed compute resource in Google Cloud Run optimized for hosting web applications, microservices, and APIs. A service is continuously active (or scaled to zero when idle) and listens on a dedicated network port for incoming HTTP(S) requests or events. It automatically scales instances up and down dynamically based on the volume of incoming traffic.
+* *Example in this project:* The `mod2-dataset-robot` HTTP handler.
+
+### Cloud Run Job
+A managed compute resource in Google Cloud Run optimized for run-to-completion tasks (batch processes, data migrations, backups). A job does not listen on any network port and is triggered manually, programmatically, or on a schedule. It executes a specified number of parallel tasks, runs them to completion (for up to 24 hours), and immediately releases all allocated resources when finished.
+* *Typical use case:* Nightly database sanitization or automated report generation.
+
+
+| Feature | Cloud Run Service | Cloud Run Job |
+| :--- | :--- | :--- |
+| **Primary Use Case** | Web applications, APIs, Webhooks | Batch processing, Backups, Migrations |
+| **How it starts** | Automatically starts when an HTTP request arrives | Triggered manually, on a schedule, or via API |
+| **Network Port** | Required (listens for incoming traffic) | Forbidden (script must execute and exit) |
+| **Scaling Metric** | Scales dynamically based on concurrent requests | Runs a predefined, explicit number of parallel tasks |
+| **Max Run Time** | Up to 60 minutes per request | Up to 24 hours per task |
+| **Scale-to-Zero** | Yes, automatically scales down to `0` when idle | Yes, resources are released immediately upon task completion |
 
 
